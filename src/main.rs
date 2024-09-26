@@ -1,12 +1,12 @@
 mod linked_list {
-    use std::{cell::RefCell, fmt::Display, rc::Rc};
+    use std::{cell::RefCell, fmt::Display, marker::PhantomData, rc::Rc};
 
-    type NodePointer<T> = Option<Rc<RefCell<Node<T>>>>;
+    type NodePointer<T> = Rc<RefCell<Node<T>>>;
 
     #[derive(Debug)]
     pub struct Node<T> {
         val: T,
-        next: NodePointer<T>
+        next: Option<NodePointer<T>>
     }
 
     impl <T: Display> Display for Node<T> {
@@ -21,11 +21,11 @@ mod linked_list {
         }
     }
 
-    // ------------------------------ Node
+    // ------------------------------ Node ------------------------------
     #[derive(Debug)]
     pub struct LinkedList<T> {
-        head: NodePointer<T>,
-        tail: NodePointer<T>,
+        head: Option<NodePointer<T>>,
+        tail: Option<NodePointer<T>>,
         length: u32
     }
 
@@ -46,21 +46,8 @@ mod linked_list {
         }
     }
 
-    impl <T: Clone> Iterator for LinkedList<T> {
-        type Item = T;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            if let Some(head_node_rc) = self.head.clone() {
-                let new_head = head_node_rc.borrow().next.clone();
-                self.head = new_head;
-                Some(head_node_rc.borrow().val.clone())
-            } else {
-                None
-            }
-        }
-    }
-
-    impl <T> LinkedList<T> {
+    // ------------------------------ Linked List ------------------------------
+    impl <T: Clone> LinkedList<T> {
         pub fn new() -> Self {
             LinkedList { head: None, tail: None, length: 0 }
         }
@@ -103,38 +90,141 @@ mod linked_list {
                 current_node = current_node_rc.borrow().next.clone();
             }
         }
+    
+        pub fn pop(&mut self) -> Option<T> {
+            if let Some(head_node) = self.head.clone() {
+                let new_head = head_node.borrow().next.clone();
+                self.head = new_head;
+                let pop_value = head_node.borrow().val.clone();
+                Some(pop_value)
+            } else {
+                None
+            }
+        }
+
+        pub fn peek(&self) -> Option<T> {
+            if let Some(head_node) = self.head.clone() {
+                let head_value = head_node.borrow().val.clone();
+                Some(head_value)
+            } else {
+                None
+            }
+        }
+
+        pub fn into_iter(self) -> IntoIter<T> {
+            IntoIter(self)
+        }
+    
+        pub fn iter(&self) -> Iter<T> {
+            Iter { current_node: self.head.clone() }
+        }
+
+        pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+            IterMut { current_node: self.head.clone(), phantom: PhantomData }
+        }
+    }
+
+    // ------------------------------ Iterator ------------------------------
+    pub struct IntoIter<T>(LinkedList<T>);
+
+    impl <T: Clone> Iterator for IntoIter<T> {
+        type Item = T;
+        fn next(&mut self) -> Option<Self::Item> {
+            self.0.pop()
+        }
+    }
+
+    pub struct Iter<T> {
+        current_node: Option<NodePointer<T>>,
+    }
+
+    impl <T: Clone> Iterator for Iter<T> {
+        type Item = T;
+        fn next(&mut self) -> Option<Self::Item> {
+            if let Some(current_node) = self.current_node.clone() {
+                self.current_node = current_node.borrow().next.clone();
+                Some(current_node.borrow().val.clone())
+            } else {
+                None
+            }
+        }
+    }
+
+    pub struct IterMut<'a, T> {
+        current_node: Option<NodePointer<T>>,
+        phantom: std::marker::PhantomData<&'a T>
+    }
+
+    impl <'a, T> Iterator for IterMut<'a, T> {
+        type Item = &'a mut T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.current_node.clone().map(|node| {
+                self.current_node = node.borrow().next.clone();
+                unsafe { &mut *(&mut node.borrow_mut().val as *mut T) }
+            })
+        }   
     }
 }
 
 use linked_list::LinkedList;
 
-#[test]
-fn calling_next() {
+// Return list with 1, 2, 3
+fn init_test_list() -> LinkedList<i32> {
     let mut list = LinkedList::<i32>::new();
 
-    list.push(5);
-    list.push(7);
     list.push(1);
+    list.push(2);
+    list.push(3);
 
-    // list.insert_at(99, 2);
+    list
+}
 
-    assert_eq!(list.next(), Some(5));
-    assert_eq!(list.next(), Some(7));
-    assert_eq!(list.next(), Some(1));
+#[test]
+fn push_pop_peek() {
+    let mut list = init_test_list();
+
+    assert_eq!(list.peek(), Some(1));
+    assert_eq!(list.pop(), Some(1));
+    assert_eq!(list.peek(), Some(2));
+    assert_eq!(list.pop(), Some(2));
+    assert_eq!(list.peek(), Some(3));
+    assert_eq!(list.pop(), Some(3));
+}
+
+#[test]
+fn into_iter() {
+    let mut iter = init_test_list().into_iter();
+
+    assert_eq!(iter.next(), Some(1));
+    assert_eq!(iter.next(), Some(2));
+    assert_eq!(iter.next(), Some(3));
+}
+
+#[test]
+fn iter() {
+    let list = init_test_list();
+    let mut iter = list.iter();
+
+    assert_eq!(iter.next(), Some(1));
+    assert_eq!(iter.next(), Some(2));
+    assert_eq!(iter.next(), Some(3));
+
+    assert_eq!(list.peek(), Some(1));
+}
+
+#[test]
+fn iter_mut() {
+    let mut list = init_test_list();
+
+    for val in list.iter_mut() {
+        *val *= 2;
+    }
+
+    assert_eq!(list.pop(), Some(2));
+    assert_eq!(list.pop(), Some(4));
+    assert_eq!(list.pop(), Some(6));
 }
 
 fn main() {
-    let mut list = LinkedList::<i32>::new();
-
-    list.push(5);
-    list.push(7);
-    list.push(1);
-
-    list.insert_at(99, 2);
-
-    for num in list {
-        println!("{}", num);
-    }
-
-    // println!("{}", list);
 }
