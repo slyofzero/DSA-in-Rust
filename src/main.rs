@@ -122,6 +122,20 @@ mod linked_list {
         pub fn iter_mut(&mut self) -> IterMut<'_, T> {
             IterMut { current_node: self.head.clone(), phantom: PhantomData }
         }
+
+        pub fn get(&self, index: u32) -> Option<T> {
+            let mut current_index = 0;
+
+            for node in self.iter() {
+                if current_index == index {
+                    return Some(node);
+                }
+
+                current_index += 1;
+            }
+
+            None
+        }
     }
 
     // ------------------------------ Iterator ------------------------------
@@ -163,7 +177,7 @@ mod linked_list {
                 self.current_node = node.borrow().next.clone();
                 unsafe { &mut *(&mut node.borrow_mut().val as *mut T) }
             })
-        }   
+        }
     }
 }
 
@@ -176,6 +190,9 @@ fn init_test_list() -> LinkedList<i32> {
     list.push(1);
     list.push(2);
     list.push(3);
+    list.push(4);
+    list.push(5);
+    list.push(6);
 
     list
 }
@@ -225,6 +242,17 @@ fn iter_mut() {
     assert_eq!(list.pop(), Some(4));
     assert_eq!(list.pop(), Some(6));
 }
+
+#[test]
+fn get() {
+    let list = init_test_list();
+
+    assert_eq!(list.get(4), Some(5));
+    assert_eq!(list.get(1), Some(2));
+    assert_eq!(list.get(0), Some(1));
+    assert_eq!(list.get(99), None);
+}
+
 
 fn main() {
 }
