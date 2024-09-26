@@ -136,6 +136,38 @@ mod linked_list {
 
             None
         }
+    
+        pub fn drop(&mut self, drop_index: u32) -> Option<T> {
+            if drop_index == 0 {
+                if let Some(head_node) = self.head.clone() {
+                    let new_head = head_node.borrow().next.clone();
+                    self.head = new_head;
+                    return Some(head_node.borrow().val.clone());
+                }
+            }
+
+            let mut current_node = self.head.clone();
+            let mut current_index = 1;
+
+            while let Some(current_node_rc) = current_node {
+                if current_index == drop_index {
+                    let node_to_drop = current_node_rc.borrow().next.clone();
+                    
+                    if let Some(node_to_drop_rc) = node_to_drop {
+                        let next_node = node_to_drop_rc.borrow().next.clone();
+                        current_node_rc.borrow_mut().next = next_node;
+                        return Some(node_to_drop_rc.borrow().val.clone());
+                    } else {
+                        return None;
+                    }
+                }
+
+                current_index += 1;
+                current_node = current_node_rc.borrow().next.clone();
+            }
+
+            None
+        }
     }
 
     // ------------------------------ Iterator ------------------------------
@@ -251,6 +283,17 @@ fn get() {
     assert_eq!(list.get(1), Some(2));
     assert_eq!(list.get(0), Some(1));
     assert_eq!(list.get(99), None);
+}
+
+#[test]
+fn drop() {
+    let mut list = init_test_list();
+
+    assert_eq!(list.drop(1), Some(2));
+    assert_eq!(list.drop(1), Some(3));
+    assert_eq!(list.drop(1), Some(4));
+    assert_eq!(list.drop(4), None);
+    assert_eq!(list.drop(0), Some(1));
 }
 
 
