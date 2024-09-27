@@ -115,8 +115,8 @@ mod linked_list {
             IntoIter(self)
         }
     
-        pub fn iter(&self) -> Iter<T> {
-            Iter { current_node: self.head.clone() }
+        pub fn iter(&self) -> Iter<'_, T> {
+            Iter { current_node: self.head.clone(), phantom: PhantomData }
         }
 
         pub fn iter_mut(&mut self) -> IterMut<'_, T> {
@@ -128,7 +128,7 @@ mod linked_list {
 
             for node in self.iter() {
                 if current_index == index {
-                    return Some(node);
+                    return Some(node.clone());
                 }
 
                 current_index += 1;
@@ -180,25 +180,24 @@ mod linked_list {
         }
     }
 
-    pub struct Iter<T> {
+    pub struct Iter<'a, T> {
         current_node: Option<NodePointer<T>>,
+        phantom: PhantomData<&'a T>
     }
 
-    impl <T: Clone> Iterator for Iter<T> {
-        type Item = T;
+    impl <'a, T: Clone> Iterator for Iter<'a, T> {
+        type Item = &'a T;
         fn next(&mut self) -> Option<Self::Item> {
-            if let Some(current_node) = self.current_node.clone() {
-                self.current_node = current_node.borrow().next.clone();
-                Some(current_node.borrow().val.clone())
-            } else {
-                None
-            }
+            self.current_node.clone().map(|node| {
+                self.current_node = node.borrow().next.clone();
+                unsafe { &*(&node.borrow().val as *const T) }
+            })
         }
     }
 
     pub struct IterMut<'a, T> {
         current_node: Option<NodePointer<T>>,
-        phantom: std::marker::PhantomData<&'a T>
+        phantom: PhantomData<&'a T>
     }
 
     impl <'a, T> Iterator for IterMut<'a, T> {
@@ -255,9 +254,9 @@ fn iter() {
     let list = init_test_list();
     let mut iter = list.iter();
 
-    assert_eq!(iter.next(), Some(1));
-    assert_eq!(iter.next(), Some(2));
-    assert_eq!(iter.next(), Some(3));
+    assert_eq!(iter.next(), Some(&1));
+    assert_eq!(iter.next(), Some(&2));
+    assert_eq!(iter.next(), Some(&3));
 
     assert_eq!(list.peek(), Some(1));
 }
