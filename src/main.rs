@@ -102,10 +102,10 @@ mod linked_list {
             }
         }
 
-        pub fn peek(&self) -> Option<T> {
+        pub fn peek(&self) -> Option<&T> {
             if let Some(head_node) = self.head.clone() {
-                let head_value = head_node.borrow().val.clone();
-                Some(head_value)
+                // let head_value = &*(&head_node.borrow().val as *const T);
+                unsafe { Some(&*(&head_node.borrow().val as *const T)) }
             } else {
                 None
             }
@@ -232,11 +232,11 @@ fn init_test_list() -> LinkedList<i32> {
 fn push_pop_peek() {
     let mut list = init_test_list();
 
-    assert_eq!(list.peek(), Some(1));
+    assert_eq!(list.peek(), Some(&1));
     assert_eq!(list.pop(), Some(1));
-    assert_eq!(list.peek(), Some(2));
+    assert_eq!(list.peek(), Some(&2));
     assert_eq!(list.pop(), Some(2));
-    assert_eq!(list.peek(), Some(3));
+    assert_eq!(list.peek(), Some(&3));
     assert_eq!(list.pop(), Some(3));
 }
 
@@ -258,7 +258,7 @@ fn iter() {
     assert_eq!(iter.next(), Some(&2));
     assert_eq!(iter.next(), Some(&3));
 
-    assert_eq!(list.peek(), Some(1));
+    assert_eq!(list.peek(), Some(&1));
 }
 
 #[test]
