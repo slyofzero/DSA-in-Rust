@@ -1,177 +1,73 @@
-mod linked_list {
-    use std::{cell::RefCell, fmt::Display, marker::PhantomData, rc::Rc};
+mod stack {
+    use std::{fmt::Debug};
 
-    type NodePointer<T> = Rc<RefCell<Node<T>>>;
+    type NodePointer<T> = Box<Node<T>>;
 
+    // ------------------------------ Node ------------------------------
     #[derive(Debug)]
-    pub struct Node<T> {
+    struct Node<T> {
         val: T,
         next: Option<NodePointer<T>>
     }
 
-    impl <T: Display> Display for Node<T> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}", self.val)
-        }
-    }
-
     impl <T> Node<T> {
-        fn new(val: T) -> Self {
-            Node { val, next: None }
+        fn new(val: T, next: Option<NodePointer<T>>) -> Self {
+            Node { val, next }
         }
     }
 
-    // ------------------------------ Node ------------------------------
+    // ------------------------------ Stack ------------------------------
     #[derive(Debug)]
-    pub struct LinkedList<T> {
+    pub struct Stack<T> {
         head: Option<NodePointer<T>>,
-        tail: Option<NodePointer<T>>,
-        length: u32
+        pub size: u32
     }
 
-    impl <T: Display> Display for LinkedList<T> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            if let Some(head_node_rc) = self.head.clone()  {
-                write!(f, "{}", head_node_rc.borrow())?;
-                let mut current = head_node_rc.borrow().next.clone();
-                
-                while let Some(node_rc) = current {
-                    let node = node_rc.borrow();
-                    write!(f, " -> {}", node.val)?;
-                    current = node.next.clone();
-                }
-            }
-
-            write!(f, "\nLength - {}", self.length)
-        }
-    }
-
-    // ------------------------------ Linked List ------------------------------
-    impl <T: Clone> LinkedList<T> {
+    impl <T> Stack<T> {
         pub fn new() -> Self {
-            LinkedList { head: None, tail: None, length: 0 }
+            Stack { head: None, size: 0 }
         }
 
         pub fn push(&mut self, val: T) {
-            let new_node = Rc::new(RefCell::new(Node::new(val)));
-
-            if let Some(tail_node_rc) = self.tail.clone() {
-                tail_node_rc.borrow_mut().next = Some(new_node.clone());
-            } else {
-                self.head = Some(new_node.clone());
-            }
-
-            self.tail = Some(new_node.clone());
-            self.length += 1;
+            let new_node = Box::new(Node::new(val, self.head.take()));
+            self.head = Some(new_node);
+            self.size += 1;
         }
 
-        pub fn insert_at(&mut self, val: T, insert_index: u32) {
-            let new_node = Rc::new(RefCell::new(Node::new(val)));
-
-            if insert_index == 0 {
-                new_node.borrow_mut().next = self.head.clone();
-                self.head = Some(new_node);
-                self.length += 1;
-                return;
-            }
-
-            let mut current_node = self.head.clone();
-            let mut current_index = 1;
-
-            while let Some(current_node_rc) = current_node {
-                if current_index == insert_index {
-                    new_node.borrow_mut().next = current_node_rc.borrow().next.clone();
-                    current_node_rc.borrow_mut().next = Some(new_node.clone());
-                    self.length += 1;
-                    break;
-                }
-
-                current_index += 1;
-                current_node = current_node_rc.borrow().next.clone();
-            }
-        }
-    
         pub fn pop(&mut self) -> Option<T> {
-            self.head.clone().map(|node| {
-                let new_head = node.borrow().next.clone();
-                self.head = new_head;
-                let pop_value = node.borrow().val.clone();
-                pop_value
+            self.head.take().map(|head_node| {
+                self.head = head_node.next;
+                head_node.val
             })
         }
 
         pub fn peek(&self) -> Option<&T> {
-            if let Some(head_node) = self.head.clone() {
-                // let head_value = &*(&head_node.borrow().val as *const T);
-                unsafe { Some(&*(&head_node.borrow().val as *const T)) }
-            } else {
-                None
-            }
+            self.head.as_ref().map(|head_node| {
+                &head_node.val
+            })
         }
 
+        pub fn is_empty(&self) -> bool {
+            self.head.is_none()
+        }
+    
         pub fn into_iter(self) -> IntoIter<T> {
             IntoIter(self)
         }
     
-        pub fn iter(&self) -> Iter<'_, T> {
-            Iter { current_node: self.head.clone(), phantom: PhantomData }
+        pub fn iter(&self) -> Iter<T> {
+            Iter { current_node: self.head.as_ref() }
         }
 
-        pub fn iter_mut(&mut self) -> IterMut<'_, T> {
-            IterMut { current_node: self.head.clone(), phantom: PhantomData }
-        }
-
-        pub fn get(&self, index: u32) -> Option<&T> {
-            let mut current_index = 0;
-
-            for node in self.iter() {
-                if current_index == index {
-                    return Some(node);
-                }
-
-                current_index += 1;
-            }
-
-            None
-        }
-    
-        pub fn drop(&mut self, drop_index: u32) -> Option<T> {
-            if drop_index == 0 {
-                if let Some(head_node) = self.head.clone() {
-                    let new_head = head_node.borrow().next.clone();
-                    self.head = new_head;
-                    return Some(head_node.borrow().val.clone());
-                }
-            }
-
-            let mut current_node = self.head.clone();
-            let mut current_index = 1;
-
-            while let Some(current_node_rc) = current_node {
-                if current_index == drop_index {
-                    let node_to_drop = current_node_rc.borrow().next.clone();
-                    
-                    if let Some(node_to_drop_rc) = node_to_drop {
-                        let next_node = node_to_drop_rc.borrow().next.clone();
-                        current_node_rc.borrow_mut().next = next_node;
-                        return Some(node_to_drop_rc.borrow().val.clone());
-                    } else {
-                        return None;
-                    }
-                }
-
-                current_index += 1;
-                current_node = current_node_rc.borrow().next.clone();
-            }
-
-            None
+        pub fn iter_mut(&mut self) -> IterMut<T> {
+            IterMut { current_node: self.head.as_mut() }
         }
     }
 
-    // ------------------------------ Iterator ------------------------------
-    pub struct IntoIter<T>(LinkedList<T>);
+    // ------------------------------ Stack ------------------------------
+    pub struct IntoIter<T> (Stack<T>);
 
-    impl <T: Clone> Iterator for IntoIter<T> {
+    impl <T> Iterator for IntoIter<T> {
         type Item = T;
         fn next(&mut self) -> Option<Self::Item> {
             self.0.pop()
@@ -179,120 +75,130 @@ mod linked_list {
     }
 
     pub struct Iter<'a, T> {
-        current_node: Option<NodePointer<T>>,
-        phantom: PhantomData<&'a T>
+        current_node: Option<&'a NodePointer<T>>
     }
 
     impl <'a, T> Iterator for Iter<'a, T> {
         type Item = &'a T;
+
         fn next(&mut self) -> Option<Self::Item> {
-            self.current_node.clone().map(|node| {
-                self.current_node = node.borrow().next.clone();
-                unsafe { &*(&node.borrow().val as *const T) }
+            self.current_node.take().map(|node| {
+                self.current_node = node.next.as_ref();
+                &node.val
             })
         }
     }
 
     pub struct IterMut<'a, T> {
-        current_node: Option<NodePointer<T>>,
-        phantom: PhantomData<&'a T>
+        current_node: Option<&'a mut NodePointer<T>>
     }
 
     impl <'a, T> Iterator for IterMut<'a, T> {
         type Item = &'a mut T;
 
         fn next(&mut self) -> Option<Self::Item> {
-            self.current_node.clone().map(|node| {
-                self.current_node = node.borrow().next.clone();
-                unsafe { &mut *(&mut node.borrow_mut().val as *mut T) }
+            self.current_node.take().map(|node| {
+                self.current_node = node.next.as_mut();
+                &mut node.val
             })
         }
     }
 }
 
-use linked_list::LinkedList;
+use stack::Stack;
 
-// Return list with 1, 2, 3
-fn init_test_list() -> LinkedList<i32> {
-    let mut list = LinkedList::<i32>::new();
+// pushed 1-6 on the stack in that exact order
+fn init_stack() -> Stack<i32> {
+    let mut stack = Stack::<i32>::new();
 
-    list.push(1);
-    list.push(2);
-    list.push(3);
-    list.push(4);
-    list.push(5);
-    list.push(6);
+    stack.push(1);
+    stack.push(2);
+    stack.push(3);
+    stack.push(4);
+    stack.push(5);
+    stack.push(6);
 
-    list
+    println!("{:?}", stack);
+
+    stack
 }
 
 #[test]
-fn push_pop_peek() {
-    let mut list = init_test_list();
+fn push() {
+    let mut stack = init_stack();
 
-    assert_eq!(list.peek(), Some(&1));
-    assert_eq!(list.pop(), Some(1));
-    assert_eq!(list.peek(), Some(&2));
-    assert_eq!(list.pop(), Some(2));
-    assert_eq!(list.peek(), Some(&3));
-    assert_eq!(list.pop(), Some(3));
+    assert_eq!(stack.pop(), Some(6));
+    assert_eq!(stack.pop(), Some(5));
+    assert_eq!(stack.pop(), Some(4));
+    assert_eq!(stack.pop(), Some(3));
+    assert_eq!(stack.pop(), Some(2));
+    assert_eq!(stack.pop(), Some(1));
+    assert_eq!(stack.pop(), None);
+}
+
+#[test]
+fn peek() {
+    let mut stack = init_stack();
+
+    assert_eq!(stack.peek(), Some(&6));
+    stack.pop();
+    stack.pop();
+    assert_eq!(stack.peek(), Some(&4));
+    stack.push(99);
+    assert_eq!(stack.peek(), Some(&99));
+}
+
+#[test]
+fn is_empty() {
+    let mut stack = Stack::<i32>::new();
+
+    assert_eq!(stack.is_empty(), true);
+    stack.push(5);
+    assert_eq!(stack.is_empty(), false);
+    stack.pop();
+    assert_eq!(stack.is_empty(), true);
 }
 
 #[test]
 fn into_iter() {
-    let mut iter = init_test_list().into_iter();
+    let mut iter = init_stack().into_iter();
 
-    assert_eq!(iter.next(), Some(1));
-    assert_eq!(iter.next(), Some(2));
+    assert_eq!(iter.next(), Some(6));
+    assert_eq!(iter.next(), Some(5));
+    assert_eq!(iter.next(), Some(4));
     assert_eq!(iter.next(), Some(3));
+    assert_eq!(iter.next(), Some(2));
+    assert_eq!(iter.next(), Some(1));
+    assert_eq!(iter.next(), None);
 }
 
 #[test]
 fn iter() {
-    let list = init_test_list();
-    let mut iter = list.iter();
+    let stack = init_stack();
+    let mut iter = stack.iter();
 
-    assert_eq!(iter.next(), Some(&1));
-    assert_eq!(iter.next(), Some(&2));
+    assert_eq!(iter.next(), Some(&6));
+    assert_eq!(iter.next(), Some(&5));
+    assert_eq!(iter.next(), Some(&4));
     assert_eq!(iter.next(), Some(&3));
-
-    assert_eq!(list.peek(), Some(&1));
+    assert_eq!(iter.next(), Some(&2));
+    assert_eq!(iter.next(), Some(&1));
+    assert_eq!(iter.next(), None);
 }
 
 #[test]
 fn iter_mut() {
-    let mut list = init_test_list();
+    let mut stack = init_stack();
+    let mut iter = stack.iter_mut();
 
-    for val in list.iter_mut() {
-        *val *= 2;
-    }
-
-    assert_eq!(list.pop(), Some(2));
-    assert_eq!(list.pop(), Some(4));
-    assert_eq!(list.pop(), Some(6));
+    assert_eq!(iter.next(), Some(&mut 6));
+    assert_eq!(iter.next(), Some(&mut 5));
+    assert_eq!(iter.next(), Some(&mut 4));
+    assert_eq!(iter.next(), Some(&mut 3));
+    assert_eq!(iter.next(), Some(&mut 2));
+    assert_eq!(iter.next(), Some(&mut 1));
+    assert_eq!(iter.next(), None);
 }
-
-#[test]
-fn get() {
-    let list = init_test_list();
-
-    assert_eq!(list.get(4), Some(&5));
-    assert_eq!(list.get(1), Some(&2));
-    assert_eq!(list.get(0), Some(&1));
-    assert_eq!(list.get(99), None);
-}
-
-#[test]
-fn drop() {
-    let mut list = init_test_list();
-
-    assert_eq!(list.drop(1), Some(2));
-    assert_eq!(list.drop(1), Some(3));
-    assert_eq!(list.drop(1), Some(4));
-    assert_eq!(list.drop(4), None);
-    assert_eq!(list.drop(0), Some(1));
-}
-
 
 fn main() {
 }
