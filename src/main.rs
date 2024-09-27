@@ -92,14 +92,12 @@ mod linked_list {
         }
     
         pub fn pop(&mut self) -> Option<T> {
-            if let Some(head_node) = self.head.clone() {
-                let new_head = head_node.borrow().next.clone();
+            self.head.clone().map(|node| {
+                let new_head = node.borrow().next.clone();
                 self.head = new_head;
-                let pop_value = head_node.borrow().val.clone();
-                Some(pop_value)
-            } else {
-                None
-            }
+                let pop_value = node.borrow().val.clone();
+                pop_value
+            })
         }
 
         pub fn peek(&self) -> Option<&T> {
@@ -123,12 +121,12 @@ mod linked_list {
             IterMut { current_node: self.head.clone(), phantom: PhantomData }
         }
 
-        pub fn get(&self, index: u32) -> Option<T> {
+        pub fn get(&self, index: u32) -> Option<&T> {
             let mut current_index = 0;
 
             for node in self.iter() {
                 if current_index == index {
-                    return Some(node.clone());
+                    return Some(node);
                 }
 
                 current_index += 1;
@@ -185,7 +183,7 @@ mod linked_list {
         phantom: PhantomData<&'a T>
     }
 
-    impl <'a, T: Clone> Iterator for Iter<'a, T> {
+    impl <'a, T> Iterator for Iter<'a, T> {
         type Item = &'a T;
         fn next(&mut self) -> Option<Self::Item> {
             self.current_node.clone().map(|node| {
@@ -278,9 +276,9 @@ fn iter_mut() {
 fn get() {
     let list = init_test_list();
 
-    assert_eq!(list.get(4), Some(5));
-    assert_eq!(list.get(1), Some(2));
-    assert_eq!(list.get(0), Some(1));
+    assert_eq!(list.get(4), Some(&5));
+    assert_eq!(list.get(1), Some(&2));
+    assert_eq!(list.get(0), Some(&1));
     assert_eq!(list.get(99), None);
 }
 
