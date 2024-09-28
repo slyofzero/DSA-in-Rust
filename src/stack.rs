@@ -116,8 +116,6 @@ fn init_stack() -> Stack<i32> {
     stack.push(5);
     stack.push(6);
 
-    println!("{:?}", stack);
-
     stack
 }
 
