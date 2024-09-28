@@ -1,1 +1,4 @@
-fn main() {}
+mod stack;
+
+fn main() {
+}
