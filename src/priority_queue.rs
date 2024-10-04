@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::fmt::Debug;
+use std::{collections::{BTreeSet, HashMap}, fmt::Debug, hash::Hash};
 
 pub enum Sort {
     Min, 
@@ -8,27 +8,32 @@ pub enum Sort {
 }
 
 pub struct PriorityQueue<T> {
-    heap: Vec<T>,
+    pub heap: Vec<T>,
     heap_size: usize,
-    sort: Sort
+    sort: Sort,
+    pub map: HashMap<T, BTreeSet<usize>>
 }
 
-impl <T: Ord + Debug> PriorityQueue<T> {
+impl <T: Ord + Debug + Hash + Clone> PriorityQueue<T> {
     pub fn new(sort: Sort) -> Self {
         PriorityQueue {
             heap: vec![],
             heap_size: 0,
-            sort
+            sort,
+            map: HashMap::new()
         }
     }
 
     pub fn add(&mut self, elem: T) {
+        self.map.entry(elem.clone()).or_insert_with(BTreeSet::new).insert(self.heap_size);
         self.heap.push(elem);
+
         self.swim_up(self.heap_size);
         self.heap_size += 1;
     }
 
-    fn is_sorted(&self, i: usize, j: usize) -> bool {
+    // true if i is in the valid sorting order to j, otherwise false
+    fn compare(&self, i: usize, j: usize) -> bool {
         let output = self.heap.get(i).zip(self.heap.get(j)).map_or(false, |(a, b)| a <= b);
 
         match self.sort {
@@ -37,16 +42,30 @@ impl <T: Ord + Debug> PriorityQueue<T> {
         }
     }
 
-    fn swap(&mut self, i: usize, j: usize) {
-        // println!("{i} {j}");
+    fn swap(&mut self, i: usize, j: usize) {        
+        // Swapping in map
+        let i_elem = self.heap[i].clone();
+        let j_elem = self.heap[j].clone();
         self.heap.swap(i, j);
+
+        if i_elem != j_elem {
+            if let Some(i_set) = self.map.get_mut(&i_elem) {
+                i_set.remove(&i);
+                i_set.insert(j);
+            }
+
+            if let Some(j_set) = self.map.get_mut(&j_elem) {
+                j_set.remove(&j);
+                j_set.insert(i);
+            }
+        }
     }
 
     fn swim_up(&mut self, mut index: usize) {
         while index > 0  {
             let parent = (index - 1) / 2;
 
-            if self.is_sorted(index, parent) {
+            if self.compare(index, parent) {
                 self.swap(parent, index);
             }
 
@@ -61,11 +80,11 @@ impl <T: Ord + Debug> PriorityQueue<T> {
             // Setting to left one by default in case of a tie
             let mut smaller = left_child;
 
-            if self.is_sorted(right_child, left_child) {
+            if self.compare(right_child, left_child) {
                 smaller = right_child;
             }
 
-            if smaller > self.heap_size - 1 || self.is_sorted(index, smaller) {
+            if smaller > self.heap_size - 1 || self.compare(index, smaller) {
                 break;
             }
 
@@ -78,33 +97,50 @@ impl <T: Ord + Debug> PriorityQueue<T> {
         self.heap_size
     }
 
-    pub fn pop(&mut self) -> T {
-        self.remove_at(0)
-    }
-
-    pub fn remove(&mut self, elem: T) {
-        let index = self.get_index(elem);
-        index.map(|i| self.remove_at(i));
-    }
-
-    pub fn remove_at(&mut self, index: usize) -> T {
-        self.swap(index, self.heap_size - 1);
+    pub fn poll(&mut self) -> T {
+        self.swap(0, self.heap_size - 1);
         let elem = self.heap.remove(self.heap_size - 1);
         self.heap_size -= 1;
 
-        self.swim_down(index);
+        self.swim_down(0);
 
         elem
     }
 
-    pub fn get_index(&self, elem: T) -> Option<usize> {
-        for i in 0..self.heap_size {
-            if self.heap[i] == elem {
-                return Some(i);
+    pub fn remove(&mut self, elem: T) {
+        let index = self.get_index(elem.clone());
+        
+        if let Some(node_index) = index {
+            self.swap(node_index, self.heap_size - 1);
+            
+            self.heap.remove(self.heap_size - 1);
+            self.map_remove(elem, self.heap_size - 1);
+            
+            self.heap_size -= 1;
+            self.swim_up(node_index);
+        }
+    }
+
+    fn map_remove(&mut self, elem: T, index: usize) {
+        if let Some(set) = self.map.get_mut(&elem) {
+            set.remove(&index);
+            println!("{:?} {}", set, index);
+            if set.is_empty() {
+                self.map.remove(&elem);
             }
         }
+    }
 
-        None
+    pub fn get_index(&self, elem: T) -> Option<usize> {
+        self.map.get(&elem).map_or(None, |set| set.first().cloned())
+
+        // for i in 0..self.heap_size {
+        //     if self.heap[i] == elem {
+        //         return Some(i);
+        //     }
+        // }
+
+        // None
     }
 
     pub fn contains(&self, elem: T) -> bool {
@@ -129,10 +165,10 @@ fn add_descending() {
     // Should be
     // 1, 2, 5, 11
 
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 2);
-    assert_eq!(queue.pop(), 5);
-    assert_eq!(queue.pop(), 11);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 2);
+    assert_eq!(queue.poll(), 5);
+    assert_eq!(queue.poll(), 11);
 }
 
 #[test]
@@ -147,10 +183,10 @@ fn add_ascending() {
     // Should be
     // 1, 2, 5, 11
 
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 2);
-    assert_eq!(queue.pop(), 5);
-    assert_eq!(queue.pop(), 11);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 2);
+    assert_eq!(queue.poll(), 5);
+    assert_eq!(queue.poll(), 11);
 }
 
 #[test]
@@ -170,15 +206,15 @@ fn add_random() {
     // Should be
     // -5, 0, 1, 1, 2, 3, 5, 11, 99
 
-    assert_eq!(queue.pop(), -5);
-    assert_eq!(queue.pop(), 0);
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 2);
-    assert_eq!(queue.pop(), 3);
-    assert_eq!(queue.pop(), 5);
-    assert_eq!(queue.pop(), 11);
-    assert_eq!(queue.pop(), 99);
+    assert_eq!(queue.poll(), -5);
+    assert_eq!(queue.poll(), 0);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 2);
+    assert_eq!(queue.poll(), 3);
+    assert_eq!(queue.poll(), 5);
+    assert_eq!(queue.poll(), 11);
+    assert_eq!(queue.poll(), 99);
 }
 
 // Max Priority Queue
@@ -194,10 +230,10 @@ fn max_add_descending() {
     // Should be
     // 11, 5, 2, 1
 
-    assert_eq!(queue.pop(), 11);
-    assert_eq!(queue.pop(), 5);
-    assert_eq!(queue.pop(), 2);
-    assert_eq!(queue.pop(), 1);
+    assert_eq!(queue.poll(), 11);
+    assert_eq!(queue.poll(), 5);
+    assert_eq!(queue.poll(), 2);
+    assert_eq!(queue.poll(), 1);
 }
 
 #[test]
@@ -212,10 +248,10 @@ fn max_add_ascending() {
     // Should be
     // 11, 5, 2, 1
 
-    assert_eq!(queue.pop(), 11);
-    assert_eq!(queue.pop(), 5);
-    assert_eq!(queue.pop(), 2);
-    assert_eq!(queue.pop(), 1);
+    assert_eq!(queue.poll(), 11);
+    assert_eq!(queue.poll(), 5);
+    assert_eq!(queue.poll(), 2);
+    assert_eq!(queue.poll(), 1);
 }
 
 #[test]
@@ -235,15 +271,15 @@ fn max_add_random() {
     // Should be
     // 99, 11, 5, 3, 2, 1, 1, 0, -5
 
-    assert_eq!(queue.pop(), 99);
-    assert_eq!(queue.pop(), 11);
-    assert_eq!(queue.pop(), 5);
-    assert_eq!(queue.pop(), 3);
-    assert_eq!(queue.pop(), 2);
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 0);
-    assert_eq!(queue.pop(), -5);
+    assert_eq!(queue.poll(), 99);
+    assert_eq!(queue.poll(), 11);
+    assert_eq!(queue.poll(), 5);
+    assert_eq!(queue.poll(), 3);
+    assert_eq!(queue.poll(), 2);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 0);
+    assert_eq!(queue.poll(), -5);
 }
 
 // Removal
@@ -266,17 +302,17 @@ fn remove() {
     // Should be
     // -5, 1, 1, 2, 3, 5, 7, 11
 
-    assert_eq!(queue.pop(), -5);
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 1);
-    assert_eq!(queue.pop(), 2);
-    assert_eq!(queue.pop(), 3);
-    assert_eq!(queue.pop(), 5);
-    assert_eq!(queue.pop(), 7);
-    assert_eq!(queue.pop(), 11);
+    assert_eq!(queue.poll(), -5);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 1);
+    assert_eq!(queue.poll(), 2);
+    assert_eq!(queue.poll(), 3);
+    assert_eq!(queue.poll(), 5);
+    assert_eq!(queue.poll(), 7);
+    assert_eq!(queue.poll(), 11);
 }
 
-// Removal
+// Contains
 #[test]
 fn contains() {
     let mut queue = PriorityQueue::<isize>::new(Sort::Min);
@@ -292,6 +328,10 @@ fn contains() {
     assert_eq!(queue.contains(-5), true);
     assert_eq!(queue.contains(1), false);
     queue.remove(-5);
+
+    println!("{:?}", queue.heap);
+    println!("{:?}", queue.map);
+
     assert_eq!(queue.contains(-5), false);
     queue.remove(11);
     assert_eq!(queue.contains(11), false);
