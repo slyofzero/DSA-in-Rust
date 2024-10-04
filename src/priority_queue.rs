@@ -8,10 +8,10 @@ pub enum Sort {
 }
 
 pub struct PriorityQueue<T> {
-    pub heap: Vec<T>,
+    heap: Vec<T>,
     heap_size: usize,
     sort: Sort,
-    pub map: HashMap<T, BTreeSet<usize>>
+    map: HashMap<T, BTreeSet<usize>>
 }
 
 impl <T: Ord + Debug + Hash + Clone> PriorityQueue<T> {
@@ -42,7 +42,7 @@ impl <T: Ord + Debug + Hash + Clone> PriorityQueue<T> {
         }
     }
 
-    fn swap(&mut self, i: usize, j: usize) {        
+    fn swap(&mut self, i: usize, j: usize) {
         // Swapping in map
         let i_elem = self.heap[i].clone();
         let j_elem = self.heap[j].clone();
